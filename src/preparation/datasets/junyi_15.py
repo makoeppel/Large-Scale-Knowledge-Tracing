@@ -4,6 +4,7 @@ import pandas as pd
 from scipy import sparse
 from collections import defaultdict
 from config.constants import DATASET_PATH, MIN_INTERACTIONS_PER_USER
+from tqdm import tqdm
 
 SM = {
     (False, False, False): 0,
@@ -125,12 +126,9 @@ def prepare_junyi_15(n_splits):
     # study module
     print("Adding sm information")
     cs = ['topic_mode', 'suggested', 'review_mode']
-    sm_vals, i = [], 0
-    for a, b, c in df[cs].values:
-        if i % 100000 == 0:
-            print(i)
+    sm_vals = []
+    for a, b, c in tqdm(df[cs].values):
         sm_vals.append(SM[(a, b, c)])
-        i += 1
     interaction_df["s_module"] = np.array(sm_vals)
 
     # response time based on first attempt
@@ -171,9 +169,7 @@ def prepare_junyi_15(n_splits):
     rcs_total, rts_total = [], []
     rcs_skill, rts_skill = [], []
     print("Adding hint and lag time information")
-    for i, user in enumerate(interaction_df["user_id"].unique()):
-        if i % 1000 == 0:
-            print(i)
+    for user in tqdm(interaction_df["user_id"].unique()):
         rc, rt = 0, 0
         rcs, rts = defaultdict(lambda: 0), defaultdict(lambda: 0)
         lt = -1

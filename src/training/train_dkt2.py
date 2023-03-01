@@ -36,7 +36,7 @@ def get_data(df, split_id=0, dataset_name='elemmath_2021', randomize=True, hold_
 
     # Train-test split across users
     if hold_out_15 == 1:
-        train_data, test_data = create_random_split(split_id)
+        train_data, test_data = create_random_split(df, data)
     else:
         s = load_split(split_id, dataset_name)
         train_ids, test_ids = set(s['train_ids']), set(s['test_ids'])
@@ -47,6 +47,7 @@ def get_data(df, split_id=0, dataset_name='elemmath_2021', randomize=True, hold_
                 train_data.append(d[1:])
             else:
                 test_data.append(d[1:])
+
     return train_data, test_data
 
 

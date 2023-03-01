@@ -102,7 +102,7 @@ def load_split(split_id, dataset):
     return split
 
 
-def create_random_split(dataset):
+def create_random_split(dataset, data):
     user_ids = dataset["user_id"]
     unique_ids = dataset["user_id"].unique()
 
@@ -110,7 +110,7 @@ def create_random_split(dataset):
     train_ids, test_ids = train_test_split(unique_ids, test_size=0.33, shuffle=True)
 
     train_data, test_data = [], []
-    for d in dataset:
+    for d in data:
         id = d[0]
         if id in train_ids:
             train_data.append(d[1:])
