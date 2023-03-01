@@ -8,14 +8,14 @@ from torch.nn.utils.rnn import pad_sequence
 
 from src.training.model_dkt2 import DKT2
 from src.utils import *
-from src.utils.data_loader import load_split
+from src.utils.data_loader import load_split, create_random_split
 from src.utils.metrics import compute_metrics
 
 from collections import defaultdict
 import json
 
 
-def get_data(df, split_id=0, dataset_name='elemmath_2021', randomize=True):
+def get_data(df, split_id=0, dataset_name='elemmath_2021', randomize=True, hold_out_15=0):
     """Extract sequences from dataframe.
     Arguments:
         df (pandas Dataframe): output by prepare_data.py
@@ -35,15 +35,18 @@ def get_data(df, split_id=0, dataset_name='elemmath_2021', randomize=True):
     data = list(zip(indices, item_inputs, skill_inputs, label_inputs, item_ids, skill_ids, labels))
 
     # Train-test split across users
-    s = load_split(split_id, dataset_name)
-    train_ids, test_ids = set(s['train_ids']), set(s['test_ids'])
-    train_data, test_data = [], []
-    for d in data:
-        id = d[0]
-        if id in train_ids:
-            train_data.append(d[1:])
-        else:
-            test_data.append(d[1:])
+    if hold_out_15 == 1:
+        train_data, test_data = create_random_split(split_id)
+    else:
+        s = load_split(split_id, dataset_name)
+        train_ids, test_ids = set(s['train_ids']), set(s['test_ids'])
+        train_data, test_data = [], []
+        for d in data:
+            id = d[0]
+            if id in train_ids:
+                train_data.append(d[1:])
+            else:
+                test_data.append(d[1:])
     return train_data, test_data
 
 
@@ -76,7 +79,7 @@ def compute_loss(preds, labels, criterion):
     return criterion(preds, labels)
 
 
-def train(train_data, val_data, model, optimizer, logger, saver, num_epochs, batch_size, print_every=50):
+def train(train_data, val_data, model, optimizer, logger, saver, num_epochs, batch_size, print_every=50, cuda=1):
     """Train DKT model.
     Arguments:
         train_data (list of lists of torch Tensor)
@@ -98,14 +101,16 @@ def train(train_data, val_data, model, optimizer, logger, saver, num_epochs, bat
 
         # Training
         for item_inputs, skill_inputs, label_inputs, item_ids, skill_ids, labels in train_batches:
-            item_inputs = item_inputs.cuda()
-            skill_inputs = skill_inputs.cuda()
-            label_inputs = label_inputs.cuda()
-            item_ids = item_ids.cuda()
-            skill_ids = skill_ids.cuda()
+            if cuda == 1:
+                item_inputs = item_inputs.cuda()
+                skill_inputs = skill_inputs.cuda()
+                label_inputs = label_inputs.cuda()
+                item_ids = item_ids.cuda()
+                skill_ids = skill_ids.cuda()
+                labels = labels.cuda()
             preds = model(item_inputs, skill_inputs, label_inputs, item_ids, skill_ids)
 
-            loss = compute_loss(preds, labels.cuda(), criterion)
+            loss = compute_loss(preds, labels, criterion)
             acc, auc, nll, mse, f1 = compute_metrics(torch.sigmoid(preds[labels >= 0]).detach().cpu().numpy().flatten(),
                                                      labels[labels >= 0].float().numpy().flatten())
 
@@ -129,11 +134,12 @@ def train(train_data, val_data, model, optimizer, logger, saver, num_epochs, bat
         all_preds = np.empty(0)
         all_label = np.empty(0)
         for item_inputs, skill_inputs, label_inputs, item_ids, skill_ids, labels in val_batches:
-            item_inputs = item_inputs.cuda()
-            skill_inputs = skill_inputs.cuda()
-            label_inputs = label_inputs.cuda()
-            item_ids = item_ids.cuda()
-            skill_ids = skill_ids.cuda()
+            if cuda == 1:
+                item_inputs = item_inputs.cuda()
+                skill_inputs = skill_inputs.cuda()
+                label_inputs = label_inputs.cuda()
+                item_ids = item_ids.cuda()
+                skill_ids = skill_ids.cuda()
             with torch.no_grad():
                 preds = model(item_inputs, skill_inputs, label_inputs, item_ids, skill_ids)
             preds = torch.sigmoid(preds[labels >= 0]).flatten().cpu().numpy()
@@ -171,6 +177,8 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--total_split', type=int, default=5)
     parser.add_argument('--print_every', type=int, default=50)
+    parser.add_argument('--hold_out_15', type=int, default=0)
+    parser.add_argument('--cuda', type=int, default=1)
     args = parser.parse_args()
     print(args.logdir, args.dataset, args.total_split)
 
@@ -180,11 +188,16 @@ if __name__ == "__main__":
 
     metric_dic = defaultdict(lambda: defaultdict(list))
     for split_id in range(args.total_split):
-        torch.cuda.empty_cache()
+        if args.cuda == 1:
+            torch.cuda.empty_cache()
         print(f'Train model for split ID {split_id}')
-        train_data, test_data = get_data(full_df, dataset_name=args.dataset, split_id=split_id)
-        model = DKT2(int(full_df["item_id"].max()), int(full_df["skill_id"].max() if "skill_id" in full_df.columns else full_df["hashed_skill_id"].max()), args.hid_size,
-                     args.embed_size, args.num_hid_layers, args.drop_prob).cuda()
+        train_data, test_data = get_data(full_df, dataset_name=args.dataset, split_id=split_id, hold_out_15=args.hold_out_15)
+        if args.cuda == 1:
+            model = DKT2(int(full_df["item_id"].max()), int(full_df["skill_id"].max() if "skill_id" in full_df.columns else full_df["hashed_skill_id"].max()), args.hid_size,
+                         args.embed_size, args.num_hid_layers, args.drop_prob).cuda()
+        else:
+            model = DKT2(int(full_df["item_id"].max()), int(full_df["skill_id"].max() if "skill_id" in full_df.columns else full_df["hashed_skill_id"].max()), args.hid_size,
+                         args.embed_size, args.num_hid_layers, args.drop_prob)
         optimizer = Adam(model.parameters(), lr=args.lr)
 
         # Reduce batch size until it fits on GPU
@@ -205,7 +218,7 @@ if __name__ == "__main__":
                 saver = Saver(args.savedir, param_str + "_" + str(split_id))
                 train(train_data, test_data, model, optimizer, logger, saver,
                       args.num_epochs, args.batch_size,
-                      print_every=args.print_every)
+                      print_every=args.print_every, cuda=args.cuda)
                 break
             except RuntimeError as e:
                 print(f'Batch does not fit on gpu, reducing size to {args.batch_size}, because')
@@ -225,11 +238,12 @@ if __name__ == "__main__":
             all_label = np.empty(0)
             for item_inputs, skill_inputs, label_inputs, item_ids, skill_ids, labels in batches:
                 with torch.no_grad():
-                    item_inputs = item_inputs.cuda()
-                    skill_inputs = skill_inputs.cuda()
-                    label_inputs = label_inputs.cuda()
-                    item_ids = item_ids.cuda()
-                    skill_ids = skill_ids.cuda()
+                    if args.cuda == 1:
+                        item_inputs = item_inputs.cuda()
+                        skill_inputs = skill_inputs.cuda()
+                        label_inputs = label_inputs.cuda()
+                        item_ids = item_ids.cuda()
+                        skill_ids = skill_ids.cuda()
                     preds = model(item_inputs, skill_inputs, label_inputs, item_ids, skill_ids)
                     preds = torch.sigmoid(preds[labels >= 0]).cpu().numpy()
                     labels = labels[labels >= 0].float().flatten().cpu().numpy()

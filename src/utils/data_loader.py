@@ -9,6 +9,7 @@ import pandas as pd
 from scipy import sparse
 from scipy.sparse import load_npz
 from config.constants import ALL_FEATURES, DATASET_PATH, SEED
+from sklearn.model_selection import train_test_split
 
 
 def load_preprocessed_data(dataset):
@@ -99,6 +100,23 @@ def load_split(split_id, dataset):
     with open(path, "rb") as file_object:
         split = pickle.load(file_object)
     return split
+
+
+def create_random_split(dataset):
+    user_ids = dataset["user_id"]
+    unique_ids = dataset["user_id"].unique()
+
+    print(f"\nCreate random split...")
+    train_ids, test_ids = train_test_split(unique_ids, test_size=0.33, shuffle=True)
+
+    train_data, test_data = [], []
+    for d in dataset:
+        id = d[0]
+        if id in train_ids:
+            train_data.append(d[1:])
+        else:
+            test_data.append(d[1:])
+    return train_data, test_data
 
 
 def get_combined_features_and_split(features, split_id, dataset):
