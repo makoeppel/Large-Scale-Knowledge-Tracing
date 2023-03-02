@@ -25,10 +25,9 @@ class Encoder_block(nn.Module):
     O = SkipConct(FFN(LayerNorm(M)))
     """
 
-    def __init__(self, dim_model, heads_en, total_ex, total_cat, seq_len, cuda=1):
+    def __init__(self, dim_model, heads_en, total_ex, total_cat, seq_len):
         super().__init__()
         self.seq_len = seq_len
-        self.cuda = cuda
         self.embd_ex = nn.Embedding(total_ex,
                                     embedding_dim=dim_model)  # embedings  q,k,v = E = exercise ID embedding, category embedding, and positionembedding.
         self.embd_cat = nn.Embedding(total_cat, embedding_dim=dim_model)
@@ -52,10 +51,10 @@ class Encoder_block(nn.Module):
         else:
             out = in_ex
 
-        if self.cuda == 1:
-            in_pos = get_pos(self.seq_len).cuda()
-        else:
-            in_pos = get_pos(self.seq_len)
+        in_pos = get_pos(self.seq_len)
+        if in_ex.is_cuda:
+            in_pos = in_pos.cuda()
+
         in_pos = self.embd_pos(in_pos)
         out = out + in_pos  # Applying positional embedding
 
@@ -65,7 +64,7 @@ class Encoder_block(nn.Module):
         n, _, _ = out.shape
         out = self.layer_norm1(out)  # Layer norm
         skip_out = out
-        if self.cuda == 1:
+        if in_ex.is_cuda:
             out, attn_wt = self.multi_en(out, out, out,
                                         attn_mask=get_mask(seq_len=n).cuda())  # attention mask upper triangular
         else:
@@ -116,10 +115,10 @@ class Decoder_block(nn.Module):
         else:
             out = in_in
 
-        if self.cuda == 1:
-            in_pos = get_pos(self.seq_len).cuda()
-        else:
-            in_pos = get_pos(self.seq_len)
+        in_pos = get_pos(self.seq_len)
+        if in_in.is_cuda:
+            in_pos = in_pos.cuda()
+
         in_pos = self.embd_pos(in_pos)
         out = out + in_pos  # Applying positional embedding
 
@@ -129,7 +128,7 @@ class Decoder_block(nn.Module):
         # Multihead attention M1                                     ## todo verify if E to passed as q,k,v
         out = self.layer_norm1(out)
         skip_out = out
-        if self.cuda == 1:
+        if in_in.is_cuda:
             out, attn_wt = self.multi_de1(out, out, out,
                                         attn_mask=get_mask(seq_len=n).cuda())  # attention mask upper triangular
         else:
@@ -141,12 +140,12 @@ class Decoder_block(nn.Module):
         en_out = en_out.permute(1, 0, 2)  # (b,n,d)-->(n,b,d)
         en_out = self.layer_norm2(en_out)
         skip_out = out
-        if self.cuda == 1:
+        if in_in.is_cuda:
             out, attn_wt = self.multi_de2(out, en_out, en_out,
                                         attn_mask=get_mask(seq_len=n).cuda())  # attention mask upper triangular
         else:
             out, attn_wt = self.multi_de2(out, en_out, en_out,
-                                        attn_mask=get_mask(seq_len=n).cuda())  # attention mask upper triangular
+                                        attn_mask=get_mask(seq_len=n))  # attention mask upper triangular
         out = out + skip_out
 
         # feed forward
