@@ -251,7 +251,7 @@ if __name__ == "__main__":
                                 + "_" + str(split_id)))
                 saver = Saver(args.savedir, param_str + "_" + str(split_id))
                 train(train_data, val_data, model, optimizer, logger, saver, args.num_epochs,
-                      args.batch_size, args.grad_clip, cuda=args.cude)
+                      args.batch_size, args.grad_clip, cuda=args.cuda)
                 break
             except RuntimeError:
                 args.batch_size = args.batch_size // 2
