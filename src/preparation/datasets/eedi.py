@@ -193,8 +193,9 @@ def prepare_eedi(n_splits):
     # drop CorrectAnswer, AnswerValue, not contained in the test files
     base = DATASET_PATH["eedi"] + "data/"
     a_order = base + "task_1_answer_id_ordering.npy"
-    a_order = np.load(a_order, allow_pickle=True)
-    a_order = a_order.item()
+    if os.path.isfile(a_order):
+        a_order = np.load(a_order, allow_pickle=True)
+        a_order = a_order.item()
     train_df = pd.read_csv(base + "train_data/train_task_1_2.csv")
     train_df.drop(columns=['CorrectAnswer', 'AnswerValue'], inplace=True)
     base += "test_data/"
@@ -248,8 +249,9 @@ def prepare_eedi(n_splits):
         np.array([a_confidence[a] for a in raw_df["AnswerId"]])
 
     # ordered answer id
-    interaction_df["sequence_number"] = \
-        np.array([a_order[a] for a in raw_df["AnswerId"]])
+    if os.path.isfile(a_order):
+        interaction_df["sequence_number"] = \
+            np.array([a_order[a] for a in raw_df["AnswerId"]])
 
     # correct
     interaction_df["correct"] = raw_df["IsCorrect"].values
@@ -262,8 +264,11 @@ def prepare_eedi(n_splits):
     # remove users with to little interactions
     def f(x): return (len(x) >= MIN_INTERACTIONS_PER_USER)
     interaction_df = interaction_df.groupby("user_id").filter(f)
-    interaction_df = interaction_df.sort_values(["user_id", "timestamp",
-                                                 "sequence_number"])
+    if os.path.isfile(a_order):
+        interaction_df = interaction_df.sort_values(["user_id", "timestamp",
+                                                    "sequence_number"])
+    else:
+        interaction_df = interaction_df.sort_values(["user_id", "timestamp"])
     interaction_df.reset_index(inplace=True, drop=True)
 
     # create splits for cross validation
