@@ -7,6 +7,7 @@ from enum import Enum
 from scipy import sparse
 from collections import defaultdict
 from config.constants import DATASET_PATH, MIN_INTERACTIONS_PER_USER
+from tqdm import tqdm
 
 
 class KT3State(Enum):
@@ -312,9 +313,7 @@ def prepare_ednet_kt3(n_splits, train_split=0.8):
     files = os.listdir(os.path.join(DATASET_PATH["ednet_kt3"], "KT3/"))
 
     dfs = []
-    for i, f in enumerate(files):
-        if i % 100 == 0:
-            print("Num processed: ", i)
+    for f in tqdm(files):
         if int(f[1:-4]) in ILL_BEHAVED:
             continue
 
