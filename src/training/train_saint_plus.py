@@ -97,7 +97,7 @@ def compute_loss(preds, labels, criterion):
     return criterion(preds, labels)
 
 
-def train(train_data, val_data, model, optimizer, logger, saver, num_epochs, batch_size, seq_len, print_every=50):
+def train(train_data, val_data, model, optimizer, logger, saver, num_epochs, batch_size, seq_len, print_every=50, cuda=1):
     """Train SAINT model.
     Arguments:
         train_data (list of tuples of torch Tensor)
@@ -121,14 +121,16 @@ def train(train_data, val_data, model, optimizer, logger, saver, num_epochs, bat
 
         # Training
         for item_ids, skill_ids, label_inputs, elapsed_time, lagged_time, labels in train_batches:
-            label_inputs = label_inputs.cuda()
-            item_ids = item_ids.cuda()
-            skill_ids = skill_ids.cuda()
-            elapsed_time = elapsed_time.cuda()
-            lagged_time = lagged_time.cuda()
+            if cuda == 1:
+                label_inputs = label_inputs.cuda()
+                item_ids = item_ids.cuda()
+                skill_ids = skill_ids.cuda()
+                elapsed_time = elapsed_time.cuda()
+                lagged_time = lagged_time.cuda()
+                labels = labels.cuda()
 
             preds = model(item_ids, skill_ids, label_inputs, elapsed_time, lagged_time)
-            loss = compute_loss(preds, labels.cuda(), criterion)
+            loss = compute_loss(preds, labels, criterion)
             preds = torch.sigmoid(preds).detach().cpu()
             acc, auc, nll, mse, f1 = compute_metrics(preds[labels >= 0].detach().cpu().numpy().flatten(),
                                                      labels[labels >= 0].float().numpy().flatten())
@@ -154,11 +156,12 @@ def train(train_data, val_data, model, optimizer, logger, saver, num_epochs, bat
         all_preds = np.empty(0)
         all_label = np.empty(0)
         for item_ids, skill_ids, label_inputs, elapsed_time, lagged_time, labels in val_batches:
-            label_inputs = label_inputs.cuda()
-            item_ids = item_ids.cuda()
-            skill_ids = skill_ids.cuda()
-            elapsed_time = elapsed_time.cuda()
-            lagged_time = lagged_time.cuda()
+            if cuda == 1:
+                label_inputs = label_inputs.cuda()
+                item_ids = item_ids.cuda()
+                skill_ids = skill_ids.cuda()
+                elapsed_time = elapsed_time.cuda()
+                lagged_time = lagged_time.cuda()
 
             with torch.no_grad():
                 preds = model(item_ids, skill_ids, label_inputs, elapsed_time, lagged_time)
@@ -199,6 +202,7 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--total_split', type=int, default=5)
     parser.add_argument('--print_every', type=int, default=50)
+    parser.add_argument('--cuda', type=int, default=1)
     args = parser.parse_args()
     print(args.logdir, args.dataset, args.total_split)
 
@@ -213,22 +217,37 @@ if __name__ == "__main__":
 
     metric_dic = defaultdict(lambda: defaultdict(list))
     for split_id in range(args.total_split):
-        torch.cuda.empty_cache()
+        if args.cuda == 1:
+            torch.cuda.empty_cache()
         print(f'Train model for split ID {split_id}')
         train_data, val_data = get_data(full_df, max_length=args.seq_len, dataset_name=args.dataset, split_index=split_id)
 
-        model = SAINTPlus(
-            n_enc_stack=args.encoder_layer,
-            n_dec_stack=args.decoder_layer,
-            n_enc_head=args.heads_en,
-            n_dec_head=args.heads_de,
-            emb_dims=args.model_size,
-            total_exe=max_item,
-            total_cat=max_skill,
-            total_res=max_label,
-            total_lt=max_lt,
-            total_rt=max_rt,
-            seq_len=args.seq_len).cuda()
+        if args.cuda == 1:
+            model = SAINTPlus(
+                n_enc_stack=args.encoder_layer,
+                n_dec_stack=args.decoder_layer,
+                n_enc_head=args.heads_en,
+                n_dec_head=args.heads_de,
+                emb_dims=args.model_size,
+                total_exe=max_item,
+                total_cat=max_skill,
+                total_res=max_label,
+                total_lt=max_lt,
+                total_rt=max_rt,
+                seq_len=args.seq_len).cuda()
+        else:
+            model = SAINTPlus(
+                n_enc_stack=args.encoder_layer,
+                n_dec_stack=args.decoder_layer,
+                n_enc_head=args.heads_en,
+                n_dec_head=args.heads_de,
+                emb_dims=args.model_size,
+                total_exe=max_item,
+                total_cat=max_skill,
+                total_res=max_label,
+                total_lt=max_lt,
+                total_rt=max_rt,
+                seq_len=args.seq_len)
         optimizer = Adam(model.parameters(), lr=args.lr)
 
         # Reduce batch size until it fits on GPU
@@ -267,11 +286,12 @@ if __name__ == "__main__":
             all_preds = np.empty(0)
             all_label = np.empty(0)
             for item_ids, skill_ids, label_inputs, elapsed_time, lagged_time, labels in batches:
-                label_inputs = label_inputs.cuda()
-                item_ids = item_ids.cuda()
-                skill_ids = skill_ids.cuda()
-                elapsed_time = elapsed_time.cuda()
-                lagged_time = lagged_time.cuda()
+                if args.cuda == 1:
+                    label_inputs = label_inputs.cuda()
+                    item_ids = item_ids.cuda()
+                    skill_ids = skill_ids.cuda()
+                    elapsed_time = elapsed_time.cuda()
+                    lagged_time = lagged_time.cuda()
 
                 with torch.no_grad():
                     preds = model(item_ids, skill_ids, label_inputs, elapsed_time, lagged_time)
