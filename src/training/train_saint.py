@@ -233,8 +233,7 @@ if __name__ == "__main__":
                 total_ex=max_item,
                 total_cat=max_skill,
                 total_in=max_label,
-                seq_len=args.seq_len,
-                cuda=args.cuda)
+                seq_len=args.seq_len)
         optimizer = Adam(model.parameters(), lr=args.lr)
 
         # Reduce batch size until it fits on GPU
