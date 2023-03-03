@@ -51,7 +51,10 @@ class Encoder_block(nn.Module):
         else:
             out = in_ex
 
-        in_pos = get_pos(self.seq_len).cuda()
+        in_pos = get_pos(self.seq_len)
+        if in_ex.is_cuda:
+            in_pos = in_pos.cuda()
+
         in_pos = self.embd_pos(in_pos)
         out = out + in_pos  # Applying positional embedding
 
@@ -61,8 +64,12 @@ class Encoder_block(nn.Module):
         n, _, _ = out.shape
         out = self.layer_norm1(out)  # Layer norm
         skip_out = out
-        out, attn_wt = self.multi_en(out, out, out,
-                                     attn_mask=get_mask(seq_len=n).cuda())  # attention mask upper triangular
+        if in_ex.is_cuda:
+            out, attn_wt = self.multi_en(out, out, out,
+                                        attn_mask=get_mask(seq_len=n).cuda())  # attention mask upper triangular
+        else:
+            out, attn_wt = self.multi_en(out, out, out,
+                                        attn_mask=get_mask(seq_len=n))  # attention mask upper triangular
         out = out + skip_out  # skip connection
 
         # feed forward
@@ -108,7 +115,10 @@ class Decoder_block(nn.Module):
         else:
             out = in_in
 
-        in_pos = get_pos(self.seq_len).cuda()
+        in_pos = get_pos(self.seq_len)
+        if in_in.is_cuda:
+            in_pos = in_pos.cuda()
+
         in_pos = self.embd_pos(in_pos)
         out = out + in_pos  # Applying positional embedding
 
@@ -118,16 +128,24 @@ class Decoder_block(nn.Module):
         # Multihead attention M1                                     ## todo verify if E to passed as q,k,v
         out = self.layer_norm1(out)
         skip_out = out
-        out, attn_wt = self.multi_de1(out, out, out,
-                                      attn_mask=get_mask(seq_len=n).cuda())  # attention mask upper triangular
+        if in_in.is_cuda:
+            out, attn_wt = self.multi_de1(out, out, out,
+                                        attn_mask=get_mask(seq_len=n).cuda())  # attention mask upper triangular
+        else:
+            out, attn_wt = self.multi_de1(out, out, out,
+                                        attn_mask=get_mask(seq_len=n))  # attention mask upper triangular
         out = skip_out + out  # skip connection
 
         # Multihead attention M2                                     ## todo verify if E to passed as q,k,v
         en_out = en_out.permute(1, 0, 2)  # (b,n,d)-->(n,b,d)
         en_out = self.layer_norm2(en_out)
         skip_out = out
-        out, attn_wt = self.multi_de2(out, en_out, en_out,
-                                      attn_mask=get_mask(seq_len=n).cuda())  # attention mask upper triangular
+        if in_in.is_cuda:
+            out, attn_wt = self.multi_de2(out, en_out, en_out,
+                                        attn_mask=get_mask(seq_len=n).cuda())  # attention mask upper triangular
+        else:
+            out, attn_wt = self.multi_de2(out, en_out, en_out,
+                                        attn_mask=get_mask(seq_len=n))  # attention mask upper triangular
         out = out + skip_out
 
         # feed forward

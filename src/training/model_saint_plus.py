@@ -27,7 +27,10 @@ class EncoderEmbedding(nn.Module):
     def forward(self, exercises, categories):
         e = self.exercise_embed(exercises)
         c = self.category_embed(categories)
-        seq = torch.arange(self.seq_len, device='cuda').unsqueeze(0)
+        if exercises.is_cuda:
+            seq = torch.arange(self.seq_len, device='cuda').unsqueeze(0)
+        else:
+            seq = torch.arange(self.seq_len).unsqueeze(0)
         p = self.position_embed(seq)
         return p + c + e
 
@@ -43,7 +46,10 @@ class DecoderEmbedding(nn.Module):
 
     def forward(self, responses):
         e = self.response_embed(responses)
-        seq = torch.arange(self.seq_len, device='cuda').unsqueeze(0)
+        if responses.is_cuda:
+            seq = torch.arange(self.seq_len, device='cuda').unsqueeze(0)
+        else:
+            seq = torch.arange(self.seq_len).unsqueeze(0)
         p = self.position_embed(seq)
         return p + e
 
@@ -70,12 +76,16 @@ class StackedNMultiHeadAttention(nn.Module):
                 norm_q = self.norm_layers(input_q)
                 norm_k = self.norm_layers(input_k)
                 norm_v = self.norm_layers(input_v)
+                if input_q.is_cuda:
+                    attn_mask = self.mask.to('cuda')
+                else:
+                    attn_mask = self.mask
                 heads_output, _ = self.multihead_layers[stack][multihead](query=norm_q.permute(1, 0, 2),
-                                                                          key=norm_k.permute(
-                                                                              1, 0, 2),
-                                                                          value=norm_v.permute(
-                                                                              1, 0, 2),
-                                                                          attn_mask=self.mask.to('cuda'))
+                                                                        key=norm_k.permute(
+                                                                            1, 0, 2),
+                                                                        value=norm_v.permute(
+                                                                            1, 0, 2),
+                                                                        attn_mask=attn_mask)
                 heads_output = heads_output.permute(1, 0, 2)
                 # assert encoder_output != None and break_layer is not None
                 if encoder_output is not None and multihead == break_layer:
