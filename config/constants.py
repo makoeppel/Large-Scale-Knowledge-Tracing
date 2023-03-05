@@ -36,6 +36,7 @@ DATASET_PATH = {
     "junyi_15": "./data/junyi_15/",
     "junyi_20": "./data/junyi_20/",
     "eedi": "./data/eedi/",
+    "ptv": "./data/ptv/",
 }
 N_SM = {
     "elemmath_2021": 6,
